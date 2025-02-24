@@ -1,5 +1,5 @@
 from .RPCResponses import RPCTransaction
-from solana_rpc.utils.TransactionTypes import *
+from argus_rpc.utils.TransactionTypes import *
 
 
 RAYDIUM_V4_PROGRAM_ADDRESS = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"

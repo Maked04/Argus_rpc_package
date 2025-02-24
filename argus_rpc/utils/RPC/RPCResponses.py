@@ -1,4 +1,4 @@
-from solana_rpc.utils.RPC import decoders
+from argus_rpc.utils.RPC import decoders
 
 class RPCTransaction:
     def __init__(self, response):

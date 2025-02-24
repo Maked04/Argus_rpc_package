@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="solana_rpc",
+    name="argus_rpc",
     version="0.1",
     packages=find_packages(),
 )
