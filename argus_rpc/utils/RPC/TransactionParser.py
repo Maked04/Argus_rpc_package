@@ -274,3 +274,98 @@ def extract_raydium_v4_transaction(transaction: RPCTransaction, debug=False) -> 
         signer_spl_before, 
         signer_spl_after, 
         signer_sol_change)
+
+def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> PumpSwapTransaction:
+    is_creator = False
+
+    signers = [key["pubkey"] for key in transaction.accounts if key['signer']]
+
+    pre_token_balances = transaction.pre_token_balances
+    post_token_balances = transaction.post_token_balances
+
+    all_token_balances = []
+    for b in pre_token_balances:
+        all_token_balances.append(b)
+    
+    for b in post_token_balances:
+        all_token_balances.append(b)
+
+    signers = [signer for signer in signers if signer in [balance["owner"] for balance in all_token_balances]]
+    if len(signers) == 1:
+        signer = signers[0]
+    
+    else:
+        if debug:
+            print(f"There wasn't one signer, list of signers: {signers} for tx: {transaction.signature}")
+        return None
+
+    # Get owner that had changes in both wsol and token
+    owner_tokens_changed = {}
+    for balance in all_token_balances:
+        if balance["owner"] not in owner_tokens_changed:
+            owner_tokens_changed[balance["owner"]] = {balance["mint"]}
+        else:
+            owner_tokens_changed[balance["owner"]].add(balance["mint"])
+
+    owner_multiple_tokens_changed = [owner for owner, tokens_changed in owner_tokens_changed.items() if len(tokens_changed) == 2]
+    if len(owner_multiple_tokens_changed) == 1:  # Only Market had 2 different token changes
+        market_account = owner_multiple_tokens_changed[0]
+    elif len(owner_multiple_tokens_changed) == 2:  # Could be market and signer had multiple changes (if signer used wsol)
+        if signer in owner_multiple_tokens_changed:
+            market_account = next((owner for owner in owner_multiple_tokens_changed if owner != signer))
+        else:
+            if debug:
+                print(f"There was 2 wallets who had 2 different tokens changed but 1 wasn't signer so can't work out market account")
+            return None
+    elif len(owner_multiple_tokens_changed) == 0 or len(owner_multiple_tokens_changed) > 2:
+        if debug:
+            print(f"There was more 0 or than 2 accounts who had more than 1 different token changed so can't work out market account")
+        return None
+
+    # At this point we have market account and it had 2 swaps
+    # Ensure one token is WSOL
+    if WSOL_TOKEN_ADDRESS not in owner_tokens_changed[market_account]:
+        if debug:
+            print(f"Market account didn't have wsol as one pool")
+        return None
+    token_address = next((token for token in owner_tokens_changed[market_account] if token != WSOL_TOKEN_ADDRESS))
+
+    # Get pool balances
+    pool_spl_before = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in pre_token_balances if balance["owner"] == market_account and balance["mint"] == token_address), 0)
+    pool_spl_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == market_account and balance["mint"] == token_address), 0)
+    pool_wsol_before = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in pre_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
+    pool_wsol_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
+    token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
+
+    # Check if pool balances started at 0, means creator tx
+    if pool_spl_before == 0 and pool_wsol_before == 0:
+        is_creator = True
+
+    # Get signer spl balances
+    signer_spl_before = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in pre_token_balances if balance["owner"] == signer and balance["mint"] == token_address), 0)
+    signer_spl_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == signer and balance["mint"] == token_address), 0)
+    # Get signer sol balances
+    signer_account_key_index = next((index for index, account in enumerate(transaction.accounts) if account["pubkey"] == signer), None)
+    signer_sol_before, signer_sol_after = transaction.pre_balances[signer_account_key_index]/1e9, transaction.post_balances[signer_account_key_index]/1e9
+
+    if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after - pool_wsol_before) < 0.01:
+        return None
+
+    return PumpSwapTransaction(
+        transaction.signature,
+        transaction.block_time,
+        transaction.slot,
+        transaction.fee /1e9, 
+        token_price=token_price,
+        token_address=token_address,
+        is_creator=is_creator,
+        signer=signer,
+        pool_spl_before=pool_spl_before,
+        pool_spl_after=pool_spl_after,
+        pool_wsol_before=pool_wsol_before,
+        pool_wsol_after=pool_wsol_after,
+        signer_spl_before=signer_spl_before,
+        signer_spl_after=signer_spl_after,
+        signer_sol_before=signer_sol_before,
+        signer_sol_after=signer_sol_after
+    )

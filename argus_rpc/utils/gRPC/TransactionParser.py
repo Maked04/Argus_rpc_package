@@ -279,6 +279,127 @@ class TransactionParser:
             signer_sol_before=signer_sol_before,
             signer_sol_after=signer_sol_after
         )
+
+    def parse_pumpswap_transaction(update, debug=False) -> PumpSwapTransaction:
+        is_creator = False
+
+        tx_info = update.transaction.transaction
+        message = tx_info.transaction.message
+        meta = tx_info.meta
+
+        num_of_signers = message.header.num_required_signatures
+        signature = base58.b58encode(bytes(tx_info.signature)).decode()
+
+        account_keys = [base58.b58encode(bytes(account_key)).decode() for account_key in message.account_keys]
+
+        signers = account_keys[:num_of_signers]
+
+        pre_balances = meta.pre_balances
+        post_balances = meta.post_balances
+
+        pre_token_balances = meta.pre_token_balances
+        post_token_balances = meta.post_token_balances
+
+        all_token_balances = []
+        for b in pre_token_balances:
+            all_token_balances.append(b)
+        
+        for b in post_token_balances:
+            all_token_balances.append(b)
+
+        block_time = update.created_at.seconds
+        slot = update.transaction.slot
+        fee = meta.fee / 1e9
+
+        # On gRPC the response has balances even when 0 so need extra check to remove signers
+        signers = [signer for signer in signers if signer in [balance.owner for balance in all_token_balances if balance.ui_token_amount.amount != "0"]]
+        if len(signers) == 1:
+            signer = signers[0]
+        else:
+            if debug:
+                print(f"TX {signature}: There wasn't one signer, list of signers: {signers}")
+            return None
+
+        # Get owner that had changes in both wsol and token
+        owner_tokens_changed = {}
+        for balance in all_token_balances:
+            if balance.owner not in owner_tokens_changed:
+                owner_tokens_changed[balance.owner] = {balance.mint}
+            else:
+                owner_tokens_changed[balance.owner].add(balance.mint)
+
+        owner_multiple_tokens_changed = [owner for owner, tokens_changed in owner_tokens_changed.items() if len(tokens_changed) == 2]
+        if len(owner_multiple_tokens_changed) == 1:  # Only Market had 2 different token changes
+            market_account = owner_multiple_tokens_changed[0]
+        elif len(owner_multiple_tokens_changed) == 2:  # Could be market and signer had multiple changes (if signer used wsol)
+            if signer in owner_multiple_tokens_changed:
+                market_account = next((owner for owner in owner_multiple_tokens_changed if owner != signer))
+            else:
+                if debug:
+                    print(f"TX {signature}: There were 2 wallets who had 2 different tokens changed but 1 wasn't signer so can't determine market account")
+                return None
+        elif len(owner_multiple_tokens_changed) == 0 or len(owner_multiple_tokens_changed) > 2:
+            if debug:
+                print(f"TX {signature}: There were {len(owner_multiple_tokens_changed)} accounts who had more than 1 different token changed so can't determine market account")
+            return None
+
+        # At this point we have market account and it had 2 swaps
+        # Ensure one token is WSOL
+        if WSOL_TOKEN_ADDRESS not in owner_tokens_changed[market_account]:
+            if debug:
+                print(f"TX {signature}: Market account didn't have wsol as one pool")
+            return None
+        token_address = next((token for token in owner_tokens_changed[market_account] if token != WSOL_TOKEN_ADDRESS))
+
+        # Get pool balances
+        pool_spl_before = next((balance.ui_token_amount.ui_amount for balance in pre_token_balances if balance.owner == market_account and balance.mint == token_address), 0)
+        pool_spl_after = next((balance.ui_token_amount.ui_amount for balance in post_token_balances if balance.owner == market_account and balance.mint == token_address), 0)
+        pool_wsol_before = next((balance.ui_token_amount.ui_amount for balance in pre_token_balances if balance.owner == market_account and balance.mint == WSOL_TOKEN_ADDRESS), 0)
+        pool_wsol_after = next((balance.ui_token_amount.ui_amount for balance in post_token_balances if balance.owner == market_account and balance.mint == WSOL_TOKEN_ADDRESS), 0)
+        
+        # Check for division by zero
+        if pool_spl_after - pool_spl_before == 0:
+            if debug:
+                print(f"TX {signature}: SPL token change is too small or zero, can't calculate price")
+            return None
+            
+        token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
+
+        # Check if pool balances started at 0, means creator tx
+        if pool_spl_before == 0 and pool_wsol_before == 0:
+            is_creator = True
+
+        # Get signer spl balances
+        signer_spl_before = next((balance.ui_token_amount.ui_amount for balance in pre_token_balances if balance.owner == signer and balance.mint == token_address), 0)
+        signer_spl_after = next((balance.ui_token_amount.ui_amount for balance in post_token_balances if balance.owner == signer and balance.mint == token_address), 0)
+
+        # Get signer sol balances
+        signer_account_key_index = account_keys.index(signer)
+        signer_sol_before, signer_sol_after = pre_balances[signer_account_key_index]/1e9, post_balances[signer_account_key_index]/1e9
+
+        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < 0.01:
+            if debug:
+                print(f"TX {signature}: Not including tx as either no SPL change or SOL change is less than 0.01 SOL")
+            return None
+        
+        return PumpSwapTransaction(
+            tx_sig=signature,
+            block_time=block_time,
+            slot=slot,
+            fee=fee,
+            token_price=token_price,
+            token_address=token_address,
+            is_creator=is_creator,
+            signer=signer,
+            pool_spl_before=pool_spl_before,
+            pool_spl_after=pool_spl_after,
+            pool_wsol_before=pool_wsol_before,
+            pool_wsol_after=pool_wsol_after,
+            signer_spl_before=signer_spl_before,
+            signer_spl_after=signer_spl_after,
+            signer_sol_before=signer_sol_before,
+            signer_sol_after=signer_sol_after
+        )
     
     @staticmethod 
     def contains_program(update, program_address) -> bool:
