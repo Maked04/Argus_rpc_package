@@ -335,6 +335,11 @@ def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> Pu
     pool_spl_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == market_account and balance["mint"] == token_address), 0)
     pool_wsol_before = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in pre_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
     pool_wsol_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
+    
+    if pool_spl_after - pool_spl_before == 0:
+        if debug:
+            print(f"TX {transaction.signature}: SPL token change is zero, can't calculate price")
+        return None
     token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
 
     # Check if pool balances started at 0, means creator tx
