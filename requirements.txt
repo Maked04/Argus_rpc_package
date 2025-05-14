@@ -3,3 +3,4 @@ grpcio
 base58
 zstandard
 construct
+protobuf

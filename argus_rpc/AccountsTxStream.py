@@ -1,9 +1,8 @@
 from .gRPCClient import *
 
-
 class AccountsTxStream(gRPCCLient):
     COMMITMENT_LEVEL = geyser_pb2.CommitmentLevel.CONFIRMED
-    def __init__(self, endpoint: str, token: str, accounts: dict[str, list[str]]) -> None:
+    def __init__(self, endpoint: str, token: str, accounts: Dict[str, List[str]]) -> None:
         self.accounts = accounts  # Name of account filter: [list of accounts]
         super().__init__(endpoint, token)
 

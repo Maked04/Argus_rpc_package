@@ -5,6 +5,7 @@ from argus_rpc.utils.TransactionTypes import *
 RAYDIUM_V4_PROGRAM_ADDRESS = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
 RAYDIUM_V4_AUTHORITY_ADDRESS = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
 WSOL_TOKEN_ADDRESS = "So11111111111111111111111111111111111111112"
+RAYDIUM_LAUNCH_PAD_AUTHORITY = "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh"
 
 
 def remove_no_spl_changes(pre_balances, post_balances):
@@ -374,3 +375,118 @@ def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> Pu
         signer_sol_before=signer_sol_before,
         signer_sol_after=signer_sol_after
     )
+
+
+def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=False):
+    pass
+
+def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=False) -> RaydiumLaunchPadTransaction:
+    '''This method parses normal swaps and liquidity added transactions, it filters where sol balance change is very low as this throws off price
+    and also filters if theres no spl change for the signer'''
+    is_creator = False
+
+    # Extract spl changes
+    SPL_pre_balances = transaction.pre_token_balances
+    SPL_post_balances = transaction.post_token_balances
+    signer_wallets = [key["pubkey"] for key in transaction.accounts if key['signer']]
+    signer_wallets = [signer for signer in signer_wallets if signer in [balance["owner"] for balance in SPL_pre_balances + SPL_post_balances]]
+    if len(signer_wallets) == 0:
+        if debug:
+            print(f"No signers for: {transaction.signature}")
+        return None
+    # Could filter ones which are signer and writable and have spl changes
+    elif len(signer_wallets) > 1:
+        if len(signer_wallets) > 2:
+            if debug:
+                print(f"More than 2 signers for tx: {transaction.signature}")
+            return None
+        else:
+            # If one signer has no sol change, other is main signer
+            zero_changes = []
+            for signer in signer_wallets:
+                pre, post = get_addresses_sol_balances(transaction, signer)
+                if pre == 0 and post == 0:
+                    zero_changes.append(signer)
+            if len(zero_changes) == 1:
+                signer = next((signer for signer in signer_wallets if signer not in zero_changes))
+            else:
+                if debug:
+                    print(f"There was 2 signers but unable to determine which one is main signer, tx: {transaction.signature}")
+                return None
+
+    signer = signer_wallets[0]
+
+    mint_accounts = set([balance['mint'] for balance in SPL_pre_balances + SPL_post_balances])
+    # Only process if theres 2 or 3 mint accounts (2 for normal, 3 for when liquidity is added)
+    if len(mint_accounts) not in [2, 3]:
+        if debug:
+            print(f"Not 2 or 3 mints in: {transaction.signature}")
+        return None
+
+    # Get mint of changes where owner is raydium v4 authority
+    raydium_owned_tokens = set([balance['mint'] for balance in SPL_pre_balances + SPL_post_balances if balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY])
+    # If theres two raydium owned token changes and one is wsol
+    if len(raydium_owned_tokens) == 2 and WSOL_TOKEN_ADDRESS in raydium_owned_tokens:
+        spl_token_address = next((mint for mint in raydium_owned_tokens if mint != WSOL_TOKEN_ADDRESS))
+
+        pool_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] != WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
+        pool_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] != WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
+
+        pool_wsol_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
+        pool_wsol_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
+
+        if pool_spl_after - pool_spl_before == 0:
+            return None
+
+        token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
+
+    else:
+        if debug:
+            print(f"There isn't 2 raydium owned tokens, one being wsol: {transaction.signature}")
+        return None
+
+    # If theres 3 different spl tokens, for creation wsol, spl token, lp spl token
+    if len(mint_accounts) == 3:
+        # I've observed when inital liquidity is added there should just be one token change which is the signer receiving lp mint tokens
+        other_token_mint = next(mint for mint in mint_accounts if mint != WSOL_TOKEN_ADDRESS and mint != spl_token_address)
+        
+        other_token_changes = [balance for balance in SPL_pre_balances + SPL_post_balances if balance["mint"] == other_token_mint and balance["owner"] == signer]
+        if len(other_token_changes) == 1 and pool_wsol_before == 0 and pool_spl_before == 0:
+            is_creator = True
+            other_token_change = other_token_changes[0]
+            if other_token_change in SPL_post_balances:  # Should only have post change as they're being given first lp tokens
+                SPL_post_balances.remove(other_token_change)
+            else:
+                if debug:
+                    print(f"Weird situation here where looks like creator tx but signer had some lp tokens before, tx: {transaction.signature}")
+                return None
+        else:
+            if debug:
+                print(f"There was 3 mint tokens in tx but wasn't inital liquidity being added, tx: {transaction.signature}")
+            return None  # Not a creation transaction so can't handle it
+    # AT THIS POINT EITHER EXTRA MINT HAS BEEN REMOVED OR RETURNED NONE
+    signer_sol_before, signer_sol_after = get_addresses_sol_balances(transaction, signer)
+
+    signer_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
+    signer_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
+    
+    if signer_spl_after - signer_spl_before == 0: # or abs(pool_wsol_after-pool_wsol_before) < 0.05:
+        return None
+        
+    return RaydiumLaunchPadTransaction(
+        transaction.signature,
+        transaction.block_time,
+        transaction.slot,
+        transaction.fee/1e9, 
+        token_price, 
+        spl_token_address, 
+        is_creator, 
+        signer, 
+        pool_spl_before, 
+        pool_spl_after, 
+        pool_wsol_before, 
+        pool_wsol_after, 
+        signer_spl_before, 
+        signer_spl_after, 
+        signer_sol_before,
+        signer_sol_after)

@@ -5,7 +5,7 @@ Client class for interacting with the Solana Yellowstone gRPC.
 import asyncio
 import grpc
 import logging
-from typing import Iterator, AsyncGenerator
+from typing import Iterator, AsyncGenerator, Dict, List
 
 from .generated import geyser_pb2
 from .generated import geyser_pb2_grpc
