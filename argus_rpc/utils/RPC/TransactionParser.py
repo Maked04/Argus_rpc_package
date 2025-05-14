@@ -125,7 +125,9 @@ def extract_pump_fun_transaction(transaction: RPCTransaction, debug=False) -> Pu
         return None
     bonding_curve_sol_before, bonding_curve_sol_after = result
 
-    if bonding_curve_spl_after - bonding_curve_spl_before == 0:
+    if abs(bonding_curve_spl_after - bonding_curve_spl_before) < 1e-9:
+        if debug:
+            print(f"TX {transaction.signature}: SPL token change is too small or zero, can't calculate price")
         return None
     token_price = abs((bonding_curve_sol_after - bonding_curve_sol_before) / (bonding_curve_spl_after - bonding_curve_spl_before))
 
@@ -213,7 +215,9 @@ def extract_raydium_v4_transaction(transaction: RPCTransaction, debug=False) -> 
         pool_wsol_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_V4_AUTHORITY_ADDRESS), 0)
         pool_wsol_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_V4_AUTHORITY_ADDRESS), 0)
 
-        if pool_spl_after - pool_spl_before == 0:
+        if abs(pool_spl_after - pool_spl_before) < 1e-9:
+            if debug:
+                print(f"TX {transaction.signature}: SPL token change is too small or zero, can't calculate price")
             return None
 
         token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
@@ -337,9 +341,9 @@ def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> Pu
     pool_wsol_before = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in pre_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
     pool_wsol_after = next((balance["uiTokenAmount"]["uiAmount"] or 0 for balance in post_token_balances if balance["owner"] == market_account and balance["mint"] == WSOL_TOKEN_ADDRESS), 0)
     
-    if pool_spl_after - pool_spl_before == 0:
+    if abs(pool_spl_after - pool_spl_before) < 1e-9:
         if debug:
-            print(f"TX {transaction.signature}: SPL token change is zero, can't calculate price")
+            print(f"TX {transaction.signature}: SPL token change is too small or zero, can't calculate price")
         return None
     token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
 
@@ -435,7 +439,9 @@ def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=Fa
         pool_wsol_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
         pool_wsol_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == WSOL_TOKEN_ADDRESS and balance["owner"] == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
 
-        if pool_spl_after - pool_spl_before == 0:
+        if abs(pool_spl_after - pool_spl_before) < 1e-9:
+            if debug:
+                print(f"TX {transaction.signature}: SPL token change is too small or zero, can't calculate price")
             return None
 
         token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))

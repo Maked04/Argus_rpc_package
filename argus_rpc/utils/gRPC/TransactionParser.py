@@ -89,7 +89,9 @@ class TransactionParser:
             pool_wsol_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == RAYDIUM_V4_AUTHORITY_ADDRESS), 0)
             pool_wsol_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == RAYDIUM_V4_AUTHORITY_ADDRESS), 0)
 
-            if pool_spl_after - pool_spl_before == 0:
+            if abs(pool_spl_after - pool_spl_before) < 1e-9:
+                if debug:
+                    print(f"TX {signature}: SPL token change is too small or zero, can't calculate price")
                 return None
 
             token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
@@ -256,6 +258,10 @@ class TransactionParser:
         signer_account_key_index = account_keys.index(signer)
         signer_sol_before, signer_sol_after = pre_balances[signer_account_key_index]/1e9, post_balances[signer_account_key_index]/1e9
 
+        if abs(bonding_curve_spl_after - bonding_curve_spl_before) < 1e-9:
+            if debug:
+                print(f"TX {signature}: SPL token change is too small or zero, can't calculate price")
+            return None
         token_price = abs((bonding_curve_sol_after - bonding_curve_sol_before) / (bonding_curve_spl_after - bonding_curve_spl_before))
 
         if signer_spl_after - signer_spl_before == 0:# or abs(bonding_curve_sol_after - bonding_curve_sol_before) < 0.05:
@@ -360,7 +366,7 @@ class TransactionParser:
         pool_wsol_after = next((balance.ui_token_amount.ui_amount for balance in post_token_balances if balance.owner == market_account and balance.mint == WSOL_TOKEN_ADDRESS), 0)
         
         # Check for division by zero
-        if pool_spl_after - pool_spl_before == 0:
+        if abs(pool_spl_after - pool_spl_before) < 1e-9:
             if debug:
                 print(f"TX {signature}: SPL token change is too small or zero, can't calculate price")
             return None
@@ -485,7 +491,7 @@ class TransactionParser:
             pool_wsol_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
             pool_wsol_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == RAYDIUM_LAUNCH_PAD_AUTHORITY), 0)
 
-            if pool_spl_after - pool_spl_before == 0:
+            if abs(pool_spl_after - pool_spl_before) < 1e-9:
                 if debug:
                     print(f"No change in pool spl balances for: {signature}")
                 return None
