@@ -7,6 +7,8 @@ RAYDIUM_V4_AUTHORITY_ADDRESS = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
 WSOL_TOKEN_ADDRESS = "So11111111111111111111111111111111111111112"
 RAYDIUM_LAUNCH_PAD_AUTHORITY = "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh"
 
+MIN_SOL_SIZE = 0.001
+
 
 class TransactionParser:
     @staticmethod
@@ -136,9 +138,9 @@ class TransactionParser:
         signer_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
         signer_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
 
-        if signer_spl_after - signer_spl_before == 0: # or abs(pool_wsol_after-pool_wsol_before) < 0.05:
+        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
             if debug:
-                print(f"DEBUG: Not including tx as either no spl change or sol change is less than 0.05 SOL")
+                print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
             return None
 
         return RaydiumV4Transaction(tx_sig=signature,
@@ -264,9 +266,9 @@ class TransactionParser:
             return None
         token_price = abs((bonding_curve_sol_after - bonding_curve_sol_before) / (bonding_curve_spl_after - bonding_curve_spl_before))
 
-        if signer_spl_after - signer_spl_before == 0:# or abs(bonding_curve_sol_after - bonding_curve_sol_before) < 0.05:
+        if signer_spl_after - signer_spl_before == 0 or abs(bonding_curve_sol_after - bonding_curve_sol_before) < MIN_SOL_SIZE:
             if debug:
-                print(f"DEBUG: Not including tx as either no spl change or sol change is less than 0.05 SOL")
+                print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
             return None
 
         return PumpFunTransaction(
@@ -385,9 +387,9 @@ class TransactionParser:
         signer_account_key_index = account_keys.index(signer)
         signer_sol_before, signer_sol_after = pre_balances[signer_account_key_index]/1e9, post_balances[signer_account_key_index]/1e9
 
-        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < 0.01:
+        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
             if debug:
-                print(f"TX {signature}: Not including tx as either no SPL change or SOL change is less than 0.01 SOL")
+                print(f"TX {signature}: Not including tx as either no SPL change or SOL change is less than {MIN_SOL_SIZE} SOL")
             return None
         
         return PumpSwapTransaction(
@@ -529,9 +531,9 @@ class TransactionParser:
         signer_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
         signer_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
 
-        if signer_spl_after - signer_spl_before == 0: # or abs(pool_wsol_after-pool_wsol_before) < 0.05:
+        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
             if debug:
-                print(f"DEBUG: Not including tx as either no spl change or sol change is less than 0.05 SOL")
+                print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
             return None
 
         return RaydiumLaunchPadTransaction(tx_sig=signature,

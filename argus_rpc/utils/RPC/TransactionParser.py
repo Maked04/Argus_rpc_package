@@ -7,6 +7,8 @@ RAYDIUM_V4_AUTHORITY_ADDRESS = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
 WSOL_TOKEN_ADDRESS = "So11111111111111111111111111111111111111112"
 RAYDIUM_LAUNCH_PAD_AUTHORITY = "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh"
 
+MIN_SOL_SIZE = 0.001
+
 
 def remove_no_spl_changes(pre_balances, post_balances):
     """ Removes pre balance and post balance for account where change was 0 """
@@ -136,10 +138,10 @@ def extract_pump_fun_transaction(transaction: RPCTransaction, debug=False) -> Pu
         return None
     signer_sol_before, signer_sol_after = result
 
-    if signer_spl_after - signer_spl_before == 0:# or abs(bonding_curve_sol_after - bonding_curve_sol_before) < 0.05:
-            if debug:
-                print(f"DEBUG: Not including tx as either no spl change or sol change is less than 0.05 SOL")
-            return None
+    if signer_spl_after - signer_spl_before == 0 or abs(bonding_curve_sol_after - bonding_curve_sol_before) < MIN_SOL_SIZE:
+        if debug:
+            print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
+        return None
 
     return PumpFunTransaction(
         tx_sig=transaction.signature,
@@ -260,7 +262,9 @@ def extract_raydium_v4_transaction(transaction: RPCTransaction, debug=False) -> 
     signer_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
     signer_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
     
-    if signer_spl_after - signer_spl_before == 0: # or abs(pool_wsol_after-pool_wsol_before) < 0.05:
+    if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
+        if debug:
+            print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
         return None
         
     return RaydiumV4Transaction(
@@ -358,7 +362,9 @@ def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> Pu
     signer_account_key_index = next((index for index, account in enumerate(transaction.accounts) if account["pubkey"] == signer), None)
     signer_sol_before, signer_sol_after = transaction.pre_balances[signer_account_key_index]/1e9, transaction.post_balances[signer_account_key_index]/1e9
 
-    if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after - pool_wsol_before) < 0.01:
+    if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after - pool_wsol_before) < MIN_SOL_SIZE:
+        if debug:
+            print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
         return None
 
     return PumpSwapTransaction(
@@ -380,9 +386,6 @@ def extract_pumpswap_transaction(transaction: RPCTransaction, debug=False) -> Pu
         signer_sol_after=signer_sol_after
     )
 
-
-def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=False):
-    pass
 
 def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=False) -> RaydiumLaunchPadTransaction:
     '''This method parses normal swaps and liquidity added transactions, it filters where sol balance change is very low as this throws off price
@@ -476,7 +479,9 @@ def extract_raydium_launch_pad_transaction(transaction: RPCTransaction, debug=Fa
     signer_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
     signer_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'] == spl_token_address and balance['owner'] == signer), 0)
     
-    if signer_spl_after - signer_spl_before == 0: # or abs(pool_wsol_after-pool_wsol_before) < 0.05:
+    if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
+        if debug:
+            print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
         return None
         
     return RaydiumLaunchPadTransaction(
