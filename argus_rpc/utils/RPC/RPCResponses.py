@@ -134,3 +134,67 @@ class RPCSendTransactionResponse:
         if isinstance(other, RPCSendTransactionResponse):
             return self.signature == other.signature
         return False
+
+
+class RPCAccountInfo:
+    def __init__(self, result_data, request_encoding):
+        """
+        Initializes the RPCAccountInfo object with the raw response from getAccountInfo.
+
+        :param result_data: The 'result' field from the getAccountInfo response
+        :param request_encoding: The encoding that was requested (e.g., 'base64', 'base58', etc.)
+        """
+        self.request_encoding = request_encoding
+        self.context = result_data.get('context', {})
+        self.slot = self.context.get('slot')
+        self.api_version = self.context.get('apiVersion')
+
+        value = result_data.get('value')
+        if value is None:
+            self.exists = False
+            self.lamports = None
+            self.owner = None
+            self.executable = False
+            self.rent_epoch = None
+            self.space = None
+            self.data = None
+            self.encoding = None
+            self.decoded_data = None
+        else:
+            self.exists = True
+            self.lamports = value.get('lamports')
+            self.owner = value.get('owner')
+            self.executable = value.get('executable', False)
+            self.rent_epoch = value.get('rentEpoch')
+            self.space = value.get('space')
+            self.data, self.encoding = value.get('data', [None, None])
+            self.decoded_data = None
+
+    def decode_data(self, account_layout_struct):
+        """
+        Decode the account's binary data using the provided construct.Struct layout.
+
+        :param account_layout_struct: construct.Struct for parsing the account data
+        """
+        if self.data and self.encoding:
+            # Use the actual encoding provided in the response
+            data_bytes = decoders.decode_on_type(self.data, self.encoding)
+            self.decoded_data = account_layout_struct.parse(data_bytes)
+
+    def __str__(self):
+        if not self.exists:
+            return "AccountInfo: Account does not exist"
+        return (f"AccountInfo: owner={self.owner}, lamports={self.lamports}, "
+                f"space={self.space}, executable={self.executable}, "
+                f"encoding={self.encoding}")
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, RPCAccountInfo)
+            and self.owner == other.owner
+            and self.lamports == other.lamports
+            and self.executable == other.executable
+            and self.rent_epoch == other.rent_epoch
+            and self.space == other.space
+            and self.data == other.data
+        )

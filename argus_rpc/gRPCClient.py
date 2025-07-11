@@ -40,7 +40,7 @@ class gRPCCLient:
         combined_creds = grpc.composite_channel_credentials(ssl_creds, auth)
         return grpc.secure_channel(self.endpoint, credentials=combined_creds)
 
-    def request_iterator(self) -> Iterator[geyser_pb2.SubscribeRequest]:
+    def request_iterator(self, from_slot=None) -> Iterator[geyser_pb2.SubscribeRequest]:
         """
         Generate subscription requests for monitoring.
         """
@@ -49,6 +49,9 @@ class gRPCCLient:
         # Create and configure slot filter
         slots_entry = request.slots.get_or_create("slots")
         slots_entry.filter_by_commitment = True
+
+        if from_slot is not None and isinstance(from_slot, int):
+            request.from_slot = from_slot
         
         # Set commitment level
         request.commitment = geyser_pb2.CommitmentLevel.FINALIZED
@@ -60,7 +63,7 @@ class gRPCCLient:
             return True
         return False
 
-    async def start_monitoring(self)  -> AsyncGenerator[geyser_pb2.SubscribeUpdate, None]:
+    async def start_monitoring(self, from_slot=None)  -> AsyncGenerator[geyser_pb2.SubscribeUpdate, None]:
         """
         Start monitoring for the specified request_iterator
 
@@ -70,7 +73,7 @@ class gRPCCLient:
             grpc.RpcError: If gRPC communication fails
         """
         try:
-            responses = self.stub.Subscribe(self.request_iterator())
+            responses = self.stub.Subscribe(self.request_iterator(from_slot))
             for response in responses:
                 if self.valid_response(response):
                     yield response

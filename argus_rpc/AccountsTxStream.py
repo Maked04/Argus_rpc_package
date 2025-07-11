@@ -21,7 +21,7 @@ class AccountsTxStream(gRPCCLient):
             and len(update.transaction.transaction.meta.err.err) == 0
         )
 
-    def request_iterator(self) -> Iterator[geyser_pb2.SubscribeRequest]:
+    def request_iterator(self, from_slot=None) -> Iterator[geyser_pb2.SubscribeRequest]:
         """
         Generate subscription request for monitoring the given accounts.
 
@@ -34,6 +34,9 @@ class AccountsTxStream(gRPCCLient):
 
         for filter_name, addresses in self.accounts.items():
             request.transactions[filter_name].account_include.extend(addresses)
+        
+        if from_slot is not None and isinstance(from_slot, int):
+            request.from_slot = from_slot
 
         request.commitment = self.COMMITMENT_LEVEL
         yield request

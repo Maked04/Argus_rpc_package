@@ -145,3 +145,44 @@ class sendTransactionRequest(RPCRequest):
         else:
             return None
 
+
+class getAccountInfoRequest(RPCRequest):
+    def __init__(self, pubkey, encoding="base64", commitment="finalized", data_slice=None):
+        """
+        Initialize the getAccountInfo request.
+        
+        :param pubkey: The public key of the account to query
+        :param encoding: The encoding for the account data (default is "base64")
+                        Options: "base58", "base64", "base64+zstd", "jsonParsed"
+        :param commitment: The commitment level (default is "finalized")
+        :param data_slice: Optional dict with 'offset' and 'length' to return a subset of the account data
+                          Only available for base58, base64, or base64+zstd encodings
+        """
+        self.encoding = encoding
+        params = [
+            pubkey,
+            {
+                "encoding": encoding,
+                "commitment": commitment
+            }
+        ]
+        
+        if data_slice:
+            if encoding in ["base58", "base64", "base64+zstd"]:
+                params[1]["dataSlice"] = data_slice
+            else:
+                print(f"To use dataSlice please use a valid encoding, instead creating request without dataSlice")
+        
+        super().__init__("getAccountInfo", params)
+    
+    def parse_response(self, response):
+        """
+        Parse the response of the getAccountInfo request.
+        
+        :param response: The raw JSON response from the Solana RPC
+        :return: RPCAccountInfo object or None if the account doesn't exist
+        """
+        if 'result' in response and response['result'] is not None:
+            return RPCAccountInfo(response['result'], self.encoding)
+        else:
+            return None

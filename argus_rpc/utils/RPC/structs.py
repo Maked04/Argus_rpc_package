@@ -1,4 +1,4 @@
-from construct import Struct, Int64ul, Bytes, Array
+from construct import Struct, Int64ul, Bytes, Array, Int8ub
 
 # Define the structure of LIQUIDITY_STATE_LAYOUT_V4
 LIQUIDITY_STATE_LAYOUT_V4 = Struct(
@@ -55,3 +55,42 @@ LIQUIDITY_STATE_LAYOUT_V4 = Struct(
     "lpReserve" / Int64ul,
     "padding" / Array(3, Int64ul)
 )
+
+
+# Define the LaunchpadVestingSchedule structure
+LAUNCHPAD_VESTING_SCHEDULE_LAYOUT = Struct(
+    "totalLockedAmount" / Int64ul,
+    "cliffPeriod" / Int64ul,
+    "unlockPeriod" / Int64ul,
+    "startTime" / Int64ul,
+    "totalAllocatedShare" / Int64ul
+)
+
+# Define the LaunchpadPool structure
+LAUNCHPAD_POOL_LAYOUT = Struct(
+    "_reserved_0" / Int64ul,
+    "epoch" / Int64ul,
+    "bump" / Int8ub,
+    "status" / Int8ub,
+    "mintDecimalsA" / Int8ub,
+    "mintDecimalsB" / Int8ub,
+    "migrateType" / Int8ub,
+    "supply" / Int64ul,
+    "totalSellA" / Int64ul,
+    "virtualA" / Int64ul,
+    "virtualB" / Int64ul,
+    "realA" / Int64ul,
+    "realB" / Int64ul,
+    "totalFundRaisingB" / Int64ul,
+    "protocolFee" / Int64ul,
+    "platformFee" / Int64ul,
+    "migrateFee" / Int64ul,
+    "vestingSchedule" / LAUNCHPAD_VESTING_SCHEDULE_LAYOUT,  # Embedded struct
+    "configId" / Bytes(32),  # publicKey
+    "platformId" / Bytes(32),  # publicKey
+    "mintA" / Bytes(32),  # publicKey
+    "mintB" / Bytes(32),  # publicKey
+    "vaultA" / Bytes(32),  # publicKey
+    "vaultB" / Bytes(32),  # publicKey
+    "creator" / Bytes(32),  # publicKey
+    "_reserved" / Array(8, Int64ul))
