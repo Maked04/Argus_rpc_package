@@ -88,8 +88,8 @@ class gRPCCLient:
 async def main():
     logging.basicConfig(level=logging.INFO)
     monitor = gRPCCLient(
-        "https://sol-yellowstone-avl.rpcfast.net:443",
-        "XpDCDCxOx30xZ80C6lM6yvtiRftO8tgsJ6w8KG7eJlPZem36c0A3GMTcCSdJUecg"
+        "add grpc endpoint url here",
+        "add grpc token here"
     )
 
     try:

@@ -44,11 +44,10 @@ class AccountsTxStream(gRPCCLient):
 
 async def main():
     logging.basicConfig(level=logging.INFO)
-    #accounts = {"raydium": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"}
     accounts = {"raydium": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8", "pumpfun": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"}
     monitor = AccountsTxStream(
-        "https://sol-yellowstone-avl.rpcfast.net:443",
-        "XpDCDCxOx30xZ80C6lM6yvtiRftO8tgsJ6w8KG7eJlPZem36c0A3GMTcCSdJUecg",
+        "add grpc endpoint url here",
+        "add grpc token here",
         accounts
     )
 
