@@ -92,7 +92,8 @@ def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
     if len(non_signer_accounts) == 1:  # For transactions we can handle there should only be one spl change account other than signer
         bonding_curve_address = non_signer_accounts[0]
     else:
-        print(f"ERROR, only signer had spl changes so can't get bonding curve changes for tx: {transaction.signature}")
+        if debug:
+            print(f"ERROR, only signer had spl changes so can't get bonding curve changes for tx: {transaction.signature}")
         return None
 
     signer_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['owner'] == signer), 0)
