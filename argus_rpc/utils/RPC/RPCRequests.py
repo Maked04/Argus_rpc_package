@@ -186,3 +186,29 @@ class getAccountInfoRequest(RPCRequest):
             return RPCAccountInfo(response['result'], self.encoding)
         else:
             return None
+
+
+class getSlotRequest(RPCRequest):
+    def __init__(self, commitment="finalized"):
+        """
+        Initialize the getSlot request.
+        
+        :param commitment: The commitment level (default is "finalized")
+                          Options: "processed", "confirmed", "finalized"
+        """
+        params = [
+            {"commitment": commitment}
+        ]
+        super().__init__("getSlot", params)
+    
+    def parse_response(self, response):
+        """
+        Parse the response of the getSlot request.
+        
+        :param response: The raw JSON response from the Solana RPC
+        :return: The current slot as an integer, or None if no result
+        """
+        if 'result' in response and response['result'] is not None:
+            return response['result']  # Returns int
+        else:
+            return None
