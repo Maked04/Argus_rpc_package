@@ -2,6 +2,7 @@
 Client class for interacting with the Solana Yellowstone gRPC.
 """
 
+import os
 import asyncio
 import grpc
 import logging
@@ -10,7 +11,27 @@ from typing import Iterator, AsyncGenerator, Dict, List
 from .generated import geyser_pb2
 from .generated import geyser_pb2_grpc
 
-logger = logging.getLogger(__name__)
+# Get the current working directory when the script is executed
+current_directory = os.getcwd()
+
+# Create logs directory if it doesn't exist
+logs_directory = os.path.join(current_directory, 'logs')
+os.makedirs(logs_directory, exist_ok=True)
+
+# Set up logger for gRPC client
+logger = logging.getLogger("gRPCClient")
+logger.setLevel(logging.INFO)
+
+# Create file handler for gRPC errors
+handler = logging.FileHandler(os.path.join(logs_directory, 'grpc_endpoint.log'))
+handler.setLevel(logging.INFO)
+
+# Create formatter and add it to the handler
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+
+# Add handler to logger
+logger.addHandler(handler)
 
 class gRPCCLient:
     """

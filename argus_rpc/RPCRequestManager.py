@@ -10,11 +10,15 @@ from .utils.RPC.RPCRequests import RPC_Error, RPCRequest
 # Get the current working directory when the script is executed
 current_directory = os.getcwd()
 
-# Logger setup
+# Create logs directory if it doesn't exist
+logs_directory = os.path.join(current_directory, 'logs')
+os.makedirs(logs_directory, exist_ok=True)
+
+# Logger setup for failed requests
 failed_requests_logger = logging.getLogger("RPCRequestManagerFailedRequests")
 failed_requests_logger.setLevel(logging.ERROR)
 # Create file handler for failed requests
-handler = logging.FileHandler(os.path.join(current_directory, "failed_requests.log"))
+handler = logging.FileHandler(os.path.join(logs_directory, "rpc_failed_requests.log"))
 handler.setLevel(logging.ERROR)
 # Create formatter and set it for the handler
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')

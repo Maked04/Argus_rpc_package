@@ -9,9 +9,13 @@ from .utils.RPC.RPCRequests import RPCRequest, RPC_Error
 # Get the current working directory when the script is executed
 current_directory = os.getcwd()
 
+# Create logs directory if it doesn't exist
+logs_directory = os.path.join(current_directory, 'logs')
+os.makedirs(logs_directory, exist_ok=True)
+
 # Configure the root logger
 logging.basicConfig(
-    filename=os.path.join(current_directory, 'rpc_endpoint.log'),
+    filename=os.path.join(logs_directory, 'rpc_endpoint.log'),
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
