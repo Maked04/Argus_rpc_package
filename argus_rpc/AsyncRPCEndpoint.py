@@ -13,12 +13,20 @@ current_directory = os.getcwd()
 logs_directory = os.path.join(current_directory, 'logs')
 os.makedirs(logs_directory, exist_ok=True)
 
-# Configure the root logger
-logging.basicConfig(
-    filename=os.path.join(logs_directory, 'rpc_endpoint.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Create a dedicated logger for AsyncRPCEndpoint
+rpc_endpoint_logger = logging.getLogger("AsyncRPCEndpoint")
+rpc_endpoint_logger.setLevel(logging.INFO)
+
+# Create file handler for RPC endpoint errors
+rpc_handler = logging.FileHandler(os.path.join(logs_directory, 'rpc_endpoint.log'))
+rpc_handler.setLevel(logging.INFO)
+
+# Create formatter and add it to the handler
+rpc_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+rpc_handler.setFormatter(rpc_formatter)
+
+# Add handler to logger
+rpc_endpoint_logger.addHandler(rpc_handler)
 
 class AsyncRPCEndpoint:
     def __init__(self, url, rps):
@@ -30,7 +38,9 @@ class AsyncRPCEndpoint:
         self.check_limit_lock = asyncio.Lock()
         self.session = None
         self.request_id = 1
-        self.logger = logging.getLogger(f"AsyncRPCEndpoint-{url}")
+        # Create a child logger specific to this endpoint URL
+        self.logger = logging.getLogger(f"AsyncRPCEndpoint.{url}")
+        # The child logger will inherit the handler from the parent logger
         self.uptime_request = {"jsonrpc":"2.0","id":1, "method":"getHealth"}
 
     async def open(self):
