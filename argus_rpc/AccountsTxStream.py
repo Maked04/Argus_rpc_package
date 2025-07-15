@@ -10,16 +10,41 @@ class AccountsTxStream(gRPCCLient):
         """
         Validate if the update contains a valid transaction and overlaps with the accounts.
         """
-        return (
-            hasattr(update, 'transaction')
-            and update.transaction
-            and hasattr(update, 'filters')  # Ensure filters exist
-            and any(item in self.accounts.keys() for item in update.filters)  # Check overlap with accounts
-            and update.transaction.transaction
-            and update.transaction.transaction.transaction
-            and update.transaction.transaction.transaction.message
-            and len(update.transaction.transaction.meta.err.err) == 0
-        )
+        if not hasattr(update, 'transaction'):
+            print("Invalid: update has no 'transaction' attribute")
+            return False
+
+        if not update.transaction:
+            print("Invalid: update.transaction is falsy")
+            return False
+
+        if not hasattr(update, 'filters'):
+            print("Invalid: update has no 'filters' attribute")
+            return False
+
+        if not any(item in self.accounts.keys() for item in update.filters):
+            print("Invalid: no overlap between update.filters and self.accounts")
+            return False
+
+        tx = update.transaction.transaction
+        if not tx:
+            print("Invalid: update.transaction.transaction is falsy")
+            return False
+
+        if not tx.transaction:
+            print("Invalid: update.transaction.transaction.transaction is falsy")
+            return False
+
+        if not tx.transaction.message:
+            print("Invalid: transaction.message is missing or falsy")
+            return False
+
+        if tx.meta and tx.meta.err and len(tx.meta.err.err) > 0:
+            print("Invalid: transaction has an error")
+            return False
+
+        return True
+
 
     def request_iterator(self, from_slot=None) -> Iterator[geyser_pb2.SubscribeRequest]:
         """
@@ -34,6 +59,10 @@ class AccountsTxStream(gRPCCLient):
 
         for filter_name, addresses in self.accounts.items():
             request.transactions[filter_name].account_include.extend(addresses)
+            # Explicitly exclude vote transactions
+            request.transactions[filter_name].vote = False
+            # Explicitly exclude failed transactions
+            request.transactions[filter_name].failed = False
         
         if from_slot is not None and isinstance(from_slot, int):
             request.from_slot = from_slot
