@@ -1,5 +1,6 @@
 import asyncio
 from grpc import RpcError
+import os
 
 # GRPC STUFF
 from argus_rpc.AccountsTxStream import AccountsTxStream
@@ -11,8 +12,8 @@ PUMP_SWAP_PROGRAM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 RAYDIUM_LAUNCH_PAD_PROGRAM = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj"
 RAYDIUM_CPMM_PROGRAM = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
 
-GRPC_ENDPOINT = "https://laserstream-mainnet-ams.helius-rpc.com"
-GRPC_TOKEN="fd02e141-63f6-4f25-9acf-538cbe76c8a2"
+GRPC_ENDPOINT = os.environ.get("GRPC_ENDPOINT")
+GRPC_TOKEN = os.environ.get("GRPC_TOKEN")
 
 
 async def main():    

@@ -1,14 +1,13 @@
 import asyncio
 import os
 from pathlib import Path
-import time
 import base58
 from google.protobuf.json_format import MessageToDict, ParseDict
 from argus_rpc.generated import geyser_pb2
 
 import json
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import List
 from grpc import RpcError
 
 # GRPC STUFF
@@ -21,8 +20,8 @@ PUMP_SWAP_PROGRAM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 RAYDIUM_LAUNCH_PAD_PROGRAM = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj"
 RAYDIUM_CPMM_PROGRAM = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
 
-GRPC_ENDPOINT = "https://laserstream-mainnet-ams.helius-rpc.com"
-GRPC_TOKEN="fd02e141-63f6-4f25-9acf-538cbe76c8a2"
+GRPC_ENDPOINT = os.environ.get("GRPC_ENDPOINT")
+GRPC_TOKEN = os.environ.get("GRPC_TOKEN")
 
 
 def save_grpc_error_response(response, directory: str = "grpc_error_responses"):
