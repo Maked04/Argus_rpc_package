@@ -15,6 +15,9 @@ def get_program_address(program_id: Pubkey, seeds: list) -> Tuple[Pubkey, int]:
 
 
 def get_raydium_launch_pad_pool_address(mint_a: str, mint_b: str) -> str:
+    mint_a = mint_a.strip()
+    mint_b = mint_b.strip()
+    
     pda, bump = get_program_address(
         LAUNCPAD_PROGRAM_ACCOUNT,
         seeds = [
