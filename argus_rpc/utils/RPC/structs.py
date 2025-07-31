@@ -1,4 +1,24 @@
-from construct import Struct, Int64ul, Bytes, Array, Int8ub
+from construct import Struct, Int64ul, Bytes, Array, Int8ub, Adapter
+import base58
+
+class PublicKey(Adapter):
+    """
+    Construct adapter that automatically converts 32-byte public keys to/from Base58 strings.
+    """
+    def __init__(self):
+        super().__init__(Bytes(32))
+    
+    def _decode(self, obj, context, path):
+        """Convert bytes to Base58 string when parsing"""
+        if obj and len(obj) == 32:
+            return base58.b58encode(obj).decode('utf-8')
+        return obj
+    
+    def _encode(self, obj, context, path):
+        """Convert Base58 string back to bytes when building"""
+        if isinstance(obj, str):
+            return base58.b58decode(obj)
+        return obj
 
 # Define the structure of LIQUIDITY_STATE_LAYOUT_V4
 LIQUIDITY_STATE_LAYOUT_V4 = Struct(
@@ -40,7 +60,7 @@ LIQUIDITY_STATE_LAYOUT_V4 = Struct(
     "swapQuoteInAmount" / Bytes(16),  # 128-bit as 16 bytes
     "swapBaseOutAmount" / Bytes(16),  # 128-bit as 16 bytes
     "swapQuote2BaseFee" / Int64ul,
-    "baseVault" / Bytes(32),  # Assuming public key is 32 bytes
+    "baseVault" / Bytes(32),  # Assuming public key is 32 bytes CHANGE TO PublicKey adapter if you ever use this struct
     "quoteVault" / Bytes(32),
     "baseMint" / Bytes(32),
     "quoteMint" / Bytes(32),
@@ -57,7 +77,6 @@ LIQUIDITY_STATE_LAYOUT_V4 = Struct(
 )
 
 
-# Define the LaunchpadVestingSchedule structure
 LAUNCHPAD_VESTING_SCHEDULE_LAYOUT = Struct(
     "totalLockedAmount" / Int64ul,
     "cliffPeriod" / Int64ul,
@@ -66,7 +85,6 @@ LAUNCHPAD_VESTING_SCHEDULE_LAYOUT = Struct(
     "totalAllocatedShare" / Int64ul
 )
 
-# Define the LaunchpadPool structure
 LAUNCHPAD_POOL_LAYOUT = Struct(
     "_reserved_0" / Int64ul,
     "epoch" / Int64ul,
@@ -85,12 +103,16 @@ LAUNCHPAD_POOL_LAYOUT = Struct(
     "protocolFee" / Int64ul,
     "platformFee" / Int64ul,
     "migrateFee" / Int64ul,
-    "vestingSchedule" / LAUNCHPAD_VESTING_SCHEDULE_LAYOUT,  # Embedded struct
-    "configId" / Bytes(32),  # publicKey
-    "platformId" / Bytes(32),  # publicKey
-    "mintA" / Bytes(32),  # publicKey
-    "mintB" / Bytes(32),  # publicKey
-    "vaultA" / Bytes(32),  # publicKey
-    "vaultB" / Bytes(32),  # publicKey
-    "creator" / Bytes(32),  # publicKey
-    "_reserved" / Array(8, Int64ul))
+    "vestingSchedule" / LAUNCHPAD_VESTING_SCHEDULE_LAYOUT,
+    
+    # These will automatically be converted to Base58 strings
+    "configId" / PublicKey(),
+    "platformId" / PublicKey(),
+    "mintA" / PublicKey(),
+    "mintB" / PublicKey(),
+    "vaultA" / PublicKey(),
+    "vaultB" / PublicKey(),
+    "creator" / PublicKey(),
+    
+    "_reserved" / Array(8, Int64ul)
+)
