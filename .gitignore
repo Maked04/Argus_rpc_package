@@ -57,3 +57,4 @@ argus_rpc/**/__pycache__/
 # OS-specific files
 .DS_Store
 Thumbs.db
+.env

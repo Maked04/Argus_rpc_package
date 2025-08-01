@@ -1,11 +1,13 @@
 from .gRPCClient import *
 
 class AccountsTxStream(gRPCCLient):
+    """Enhanced AccountsTxStream with connection monitoring"""
     COMMITMENT_LEVEL = geyser_pb2.CommitmentLevel.CONFIRMED
-    def __init__(self, endpoint: str, token: str, accounts: Dict[str, List[str]]) -> None:
+    
+    def __init__(self, endpoint: str, token: str, accounts: Dict[str, List[str]], connection_timeout: int = 30) -> None:
         self.accounts = accounts  # Name of account filter: [list of accounts]
-        super().__init__(endpoint, token)
-
+        super().__init__(endpoint, token, connection_timeout)
+        
     def valid_response(self, update: geyser_pb2.SubscribeUpdate) -> bool:
         """
         Validate if the update contains a valid transaction and overlaps with the accounts.
@@ -20,14 +22,12 @@ class AccountsTxStream(gRPCCLient):
             and update.transaction.transaction.transaction.message
             and len(update.transaction.transaction.meta.err.err) == 0
         )
-
-
+        
     def request_iterator(self, from_slot=None) -> Iterator[geyser_pb2.SubscribeRequest]:
         """
         Generate subscription request for monitoring the given accounts.
-
         accounts: mapping from account name to account address
-
+        
         Yields:
             geyser_pb2.SubscribeRequest: Configured subscription request
         """
@@ -39,35 +39,51 @@ class AccountsTxStream(gRPCCLient):
             request.transactions[filter_name].vote = False
             # Explicitly exclude failed transactions
             request.transactions[filter_name].failed = False
-        
+       
         if from_slot is not None and isinstance(from_slot, int):
             request.from_slot = from_slot
-
+            
         request.commitment = self.COMMITMENT_LEVEL
         yield request
 
 
 async def main():
     logging.basicConfig(level=logging.INFO)
+    
+    # Example usage
     accounts = {"raydium": "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8", "pumpfun": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"}
+
     monitor = AccountsTxStream(
         "add grpc endpoint url here",
         "add grpc token here",
-        accounts
+        accounts,
+        ping=True,
+        connection_timeout=30  # Consider connection dead after 30s of no data
     )
 
-    try:
-        count = 0
-        async for response in monitor.start_monitoring():
-            count += 1
-            if count > 15:
-                break
-            
-            if "pumpfun" in response.filters:
-                print(response)
+    while True:
+        try:
+            async for response in monitor.start_monitoring():
+                print(f"Received transaction: {response}")
 
-    except KeyboardInterrupt:
-        print("\nShutting down...")
+        except grpc.RpcError as e:
+            print(f"gRPC error: {e.code()} - {e.details()}")
+            print("Reconnecting in 5 seconds...")
+            await asyncio.sleep(5)
+            # Handle gap filling logic here
+            
+        except ConnectionTimeoutError as e:
+            print(f"Connection timeout: {e}")
+            print("Reconnecting in 5 seconds...")
+            await asyncio.sleep(5)
+            # Handle gap filling logic here
+            
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            break
+        finally:
+            monitor.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

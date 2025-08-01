@@ -1,5 +1,8 @@
 import asyncio
+from dotenv import load_dotenv
 import os
+import time
+
 from pathlib import Path
 import base58
 from google.protobuf.json_format import MessageToDict, ParseDict
@@ -8,9 +11,10 @@ from argus_rpc.generated import geyser_pb2
 import json
 from datetime import datetime
 from typing import List
-from grpc import RpcError
+from grpc import RpcError, StatusCode
 
 # GRPC STUFF
+from argus_rpc.gRPCClient import ConnectionTimeoutError, gRPCCLient
 from argus_rpc.AccountsTxStream import AccountsTxStream
 from argus_rpc.utils.gRPC.TransactionParser import TransactionParser
 
@@ -20,9 +24,11 @@ PUMP_SWAP_PROGRAM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 RAYDIUM_LAUNCH_PAD_PROGRAM = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj"
 RAYDIUM_CPMM_PROGRAM = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
 
+
+load_dotenv()
+
 GRPC_ENDPOINT = os.environ.get("GRPC_ENDPOINT")
 GRPC_TOKEN = os.environ.get("GRPC_TOKEN")
-
 
 def save_grpc_error_response(response, directory: str = "grpc_error_responses"):
     """
@@ -106,14 +112,21 @@ async def test_new_txs():
                         try:
                             transaction = TransactionParser.parse_pumpfun_transaction(response)
                             if transaction:
-                                print(transaction)
-                                running = False
-                                break
+                                print(f"{time.time() - transaction.block_time} seconds behind realtime")
 
                         except Exception as e:
                             print(f"Error parsing transaction: {str(e)}")
 
+            except ConnectionTimeoutError as e:
+                # Handle timeout - connection went silent
+                print(f"Would be logging -> Connection timeout: {e}")
+                await asyncio.sleep(5)
+                continue
+
             except RpcError as rpc_error:
+                if rpc_error.code() == StatusCode.DATA_LOSS:
+                    print("Would be start filling gap")
+
                 print(f"\nGRPC connection error: {rpc_error}")
                 print("Attempting to reconnect in 5 seconds...")
                 await asyncio.sleep(5)
