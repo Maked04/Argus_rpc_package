@@ -7,6 +7,7 @@ RAYDIUM_V4_AUTHORITY_ADDRESS = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
 WSOL_TOKEN_ADDRESS = "So11111111111111111111111111111111111111112"
 RAYDIUM_LAUNCH_PAD_AUTHORITY = "WLHv2UAZm6z4KyaaELi5pjdbJh6RESMva1Rnn8pJVVh"
 RAYDIUM_CPMM_AUTHORITY_ADDRESS = "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL"
+METEORA_DBC_AUTHORITY_ADDRESS = "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM"
 
 MIN_SOL_SIZE = 0.001
 
@@ -685,6 +686,149 @@ class TransactionParser:
             return None
 
         return RaydiumLaunchPadTransaction(tx_sig=signature,
+                                    block_time=block_time,
+                                    slot=slot,
+                                    fee=fee,
+                                    token_price=token_price,
+                                    token_address=spl_token_address,
+                                    is_creator=is_creator,
+                                    signer=signer,
+                                    pool_spl_before=pool_spl_before,
+                                    pool_spl_after=pool_spl_after,
+                                    pool_wsol_before=pool_wsol_before,
+                                    pool_wsol_after=pool_wsol_after,
+                                    signer_spl_before=signer_spl_before,
+                                    signer_spl_after=signer_spl_after,
+                                    signer_sol_before=signer_sol_before,
+                                    signer_sol_after=signer_sol_after
+                                    )
+    
+
+    @staticmethod
+    def parse_meteora_dbc_transaction(update, debug=False) -> MeteoraDBCTransaction:
+        is_creator = False
+
+        tx_info = update.transaction.transaction
+        message = tx_info.transaction.message
+        meta = tx_info.meta
+
+        num_of_signers = message.header.num_required_signatures
+
+        account_keys = [base58.b58encode(bytes(account_key)).decode() for account_key in message.account_keys]
+
+        signers = account_keys[:num_of_signers]
+
+        pre_balances = meta.pre_balances
+        post_balances = meta.post_balances
+
+        pre_token_balances = meta.pre_token_balances
+        post_token_balances = meta.post_token_balances
+
+        all_token_balances = []
+        for b in pre_token_balances:
+            all_token_balances.append(b)
+        
+        for b in post_token_balances:
+            all_token_balances.append(b)
+
+
+        block_time = update.created_at.seconds
+        slot = update.transaction.slot
+        fee = meta.fee / 1e9
+        signature=base58.b58encode(bytes(tx_info.signature)).decode()
+
+        # Remove no spl change signers
+        signers = [signer for signer in signers if signer in [balance.owner for balance in all_token_balances]]
+        if len(signers) == 0:
+            if debug:
+                print(f"DEBUG: No signers for tx: {signature}")
+            return None
+        
+        elif len(signers) > 1:
+            if len(signers) >= 3:
+                if debug:
+                    print(f"DEBUG: 3 or more signers")
+                return None
+            else:  # If this condition is met then theres 2 signers
+                zero_changes = []
+                for signer in signers:
+                    signer_account_key_index = account_keys.index(signer)
+                    pre, post = pre_balances[signer_account_key_index], post_balances[signer_account_key_index]
+                    #if pre == 0 and post == 0 or abs(pre - post) == 0:
+                    if pre == 0 and post == 0:
+                        zero_changes.append(signer)
+                if len(zero_changes) == 1:
+                    signer = next((signer for signer in signers if signer not in zero_changes))
+                else:
+                    if debug:
+                        print(f"DEBUG: There was 2 signers but unable to determine which one is main signer, tx: {signature}")
+                    return None
+
+        signer = signers[0]
+        signer_account_key_index = account_keys.index(signer)
+
+        mint_accounts = set([balance.mint for balance in all_token_balances])
+        # Only process if theres 2 or 3 mint accounts (2 for normal, 3 for when liquidity is added)
+        if len(mint_accounts) not in [2, 3]:
+            if debug:
+                print(f"Not 2 or 3 mints in: {signature}")
+            return None
+
+        meteora_owned_tokens = set([balance.mint for balance in all_token_balances if balance.owner == METEORA_DBC_AUTHORITY_ADDRESS])
+
+        if len(meteora_owned_tokens) == 2 and WSOL_TOKEN_ADDRESS in meteora_owned_tokens:
+            spl_token_address = next((mint for mint in meteora_owned_tokens if mint != WSOL_TOKEN_ADDRESS))
+
+            pool_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint != WSOL_TOKEN_ADDRESS and balance.owner == METEORA_DBC_AUTHORITY_ADDRESS), 0)
+            pool_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint != WSOL_TOKEN_ADDRESS and balance.owner == METEORA_DBC_AUTHORITY_ADDRESS), 0)
+
+            pool_wsol_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == METEORA_DBC_AUTHORITY_ADDRESS), 0)
+            pool_wsol_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == WSOL_TOKEN_ADDRESS and balance.owner == METEORA_DBC_AUTHORITY_ADDRESS), 0)
+
+            if abs(pool_spl_after - pool_spl_before) < 1e-9:
+                if debug:
+                    print(f"No change in pool spl balances for: {signature}")
+                return None
+
+            token_price = abs((pool_wsol_after - pool_wsol_before) / (pool_spl_after - pool_spl_before))
+
+        else:
+            if debug:
+                print(f"There isn't 2 meteora owned tokens, one being wsol: {signature}")
+            return None
+        
+        if len(mint_accounts) == 3:
+            # I've observed when inital liquidity is added there should just be one token change which is the signer receiving lp mint tokens
+            other_token_mint = next(mint for mint in mint_accounts if mint != WSOL_TOKEN_ADDRESS and mint != spl_token_address)
+            
+            other_token_changes = [balance for balance in all_token_balances if balance.mint == other_token_mint and balance.owner == signer]
+            if len(other_token_changes) == 1 and pool_wsol_before == 0 and pool_spl_before == 0:
+                is_creator = True
+                other_token_change = other_token_changes[0]
+                if other_token_change in post_token_balances:  # Should only have post change as they're being given first lp tokens
+                    post_token_balances.remove(other_token_change)
+                    all_token_balances.remove(other_token_change)
+                else:
+                    if debug:
+                        print(f"Weird situation here where looks like creator tx but signer had some lp tokens before, tx: {signature}")
+                    return None
+            else:
+                if debug:
+                    print(f"There was 3 mint tokens in tx but wasn't inital liquidity being added, tx: {signature}")
+                return None  # Not a creation transaction so can't handle it
+        
+        # AT THIS POINT EITHER EXTRA MINT HAS BEEN REMOVED OR RETURNED NONE
+        signer_sol_before, signer_sol_after = pre_balances[signer_account_key_index] / 1e9, post_balances[signer_account_key_index] / 1e9
+
+        signer_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
+        signer_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint == spl_token_address and balance.owner == signer), 0)
+
+        if signer_spl_after - signer_spl_before == 0 or abs(pool_wsol_after-pool_wsol_before) < MIN_SOL_SIZE:
+            if debug:
+                print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
+            return None
+
+        return MeteoraDBCTransaction(tx_sig=signature,
                                     block_time=block_time,
                                     slot=slot,
                                     fee=fee,
