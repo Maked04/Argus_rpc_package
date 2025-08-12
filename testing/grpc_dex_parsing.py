@@ -23,6 +23,7 @@ PUMP_FUN_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
 PUMP_SWAP_PROGRAM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 RAYDIUM_LAUNCH_PAD_PROGRAM = "LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj"
 RAYDIUM_CPMM_PROGRAM = "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+METEORA_DBC_PROGRAM = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
 
 
 load_dotenv()
@@ -100,7 +101,7 @@ def load_grpc_responses(directory: str = "grpc_error_responses") -> List[geyser_
 
 
 async def test_new_txs():    
-    accounts = {"pump_fun": ["6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"]}
+    accounts = {"meteora_dbc": [METEORA_DBC_PROGRAM]}
 
     running = True
     try:
@@ -108,11 +109,13 @@ async def test_new_txs():
             try:
                 monitor = AccountsTxStream(GRPC_ENDPOINT, GRPC_TOKEN, accounts)   
                 async for response in monitor.start_monitoring():
-                    if "pump_fun" in response.filters:
+                    if "meteora_dbc" in response.filters:
                         try:
-                            transaction = TransactionParser.parse_pumpfun_transaction(response)
-                            if transaction:
-                                print(f"{time.time() - transaction.block_time} seconds behind realtime")
+                            transaction = TransactionParser.parse_meteora_dbc_transaction(response, debug=True)
+                            #if transaction:
+                            #    print(transaction)
+                            #    input("enter to continue")
+                                #print(f"{time.time() - transaction.block_time} seconds behind realtime")
 
                         except Exception as e:
                             print(f"Error parsing transaction: {str(e)}")
