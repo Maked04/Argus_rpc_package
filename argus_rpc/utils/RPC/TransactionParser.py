@@ -29,6 +29,17 @@ def remove_no_spl_changes(pre_balances, post_balances):
 
     return pre_balances, post_balances
 
+def remove_wsol_spl_changes(SPL_pre_balances, SPL_post_balances):
+    account_indexes_to_remove = set()
+    for balance in SPL_pre_balances + SPL_post_balances:
+        if balance['mint'] == WSOL_TOKEN_ADDRESS:
+            account_indexes_to_remove.add(balance['accountIndex'])
+
+    SPL_pre_balances = [balance for balance in SPL_pre_balances if balance['accountIndex'] not in account_indexes_to_remove]
+    SPL_post_balances = [balance for balance in SPL_post_balances if balance['accountIndex'] not in account_indexes_to_remove]
+
+    return SPL_pre_balances, SPL_post_balances
+
 def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
     """ Pump fun transactions are direct sol - token swap and so only 1 spl token 
         2 sets of changes are the signers and the bonding curves token holdings
@@ -41,13 +52,15 @@ def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
     # Remove balances where change is 0
     SPL_pre_balances, SPL_post_balances = remove_no_spl_changes(SPL_pre_balances, SPL_post_balances)
 
+    SPL_pre_balances, SPL_post_balances = remove_wsol_spl_changes(SPL_pre_balances, SPL_post_balances)
+
     signer_wallets = [key["pubkey"] for key in transaction.accounts if key['signer']]
     # Only count signers that have spl change
     signer_wallets = [signer for signer in signer_wallets if signer in [balance["owner"] for balance in SPL_pre_balances + SPL_post_balances]]
 
     # Token address should be the mint of any balance in spls
     # Get all mints
-    mint_accounts = set([balance['mint'] for balance in SPL_post_balances + SPL_post_balances])
+    mint_accounts = set([balance['mint'] for balance in SPL_post_balances + SPL_post_balances if balance['mint'] != WSOL_TOKEN_ADDRESS])
     # If more than one skip tx 
     if len(mint_accounts) > 1:
         if debug:
