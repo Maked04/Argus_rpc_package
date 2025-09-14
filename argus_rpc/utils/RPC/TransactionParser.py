@@ -60,7 +60,7 @@ def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
 
     # Token address should be the mint of any balance in spls
     # Get all mints
-    mint_accounts = set([balance['mint'] for balance in SPL_post_balances + SPL_post_balances if balance['mint'] != WSOL_TOKEN_ADDRESS])
+    mint_accounts = set([balance['mint'] for balance in SPL_post_balances + SPL_post_balances])
     # If more than one skip tx 
     if len(mint_accounts) > 1:
         if debug:

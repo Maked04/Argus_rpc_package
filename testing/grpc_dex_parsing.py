@@ -101,7 +101,7 @@ def load_grpc_responses(directory: str = "grpc_error_responses") -> List[geyser_
 
 
 async def test_new_txs():    
-    accounts = {"meteora_dbc": [METEORA_DBC_PROGRAM]}
+    accounts = {"pump_fun": [PUMP_FUN_PROGRAM]}
 
     running = True
     try:
@@ -109,9 +109,12 @@ async def test_new_txs():
             try:
                 monitor = AccountsTxStream(GRPC_ENDPOINT, GRPC_TOKEN, accounts)   
                 async for response in monitor.start_monitoring():
-                    if "meteora_dbc" in response.filters:
+                    if "pump_fun" in response.filters:
                         try:
-                            transaction = TransactionParser.parse_meteora_dbc_transaction(response, debug=True)
+                            transaction = TransactionParser.parse_pumpfun_transaction(response, debug=True)
+                            print(transaction)
+                            if transaction is None:
+                                input("enter to continue")
                             #if transaction:
                             #    print(transaction)
                             #    input("enter to continue")

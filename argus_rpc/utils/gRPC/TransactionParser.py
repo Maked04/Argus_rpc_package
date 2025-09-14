@@ -14,6 +14,92 @@ MIN_SOL_SIZE = 0.001
 
 class TransactionParser:
     @staticmethod
+    def remove_zero_balance_changes(pre_token_balances, post_token_balances):
+        """Remove token balance pairs where the actual change is negligible"""
+        
+        # Create sets of (owner, mint) pairs for efficient lookup
+        pre_pairs = {(balance.owner, balance.mint): balance for balance in pre_token_balances}
+        post_pairs = {(balance.owner, balance.mint): balance for balance in post_token_balances}
+        
+        # Find pairs with negligible changes
+        pairs_to_remove = set()
+        
+        for (owner, mint), pre_balance in pre_pairs.items():
+            if (owner, mint) in post_pairs:
+                post_balance = post_pairs[(owner, mint)]
+                pre_amount = pre_balance.ui_token_amount.ui_amount or 0
+                post_amount = post_balance.ui_token_amount.ui_amount or 0
+                
+                # If change is negligible, mark for removal
+                if abs(post_amount - pre_amount) < 1e-9:
+                    pairs_to_remove.add((owner, mint))
+        
+        # Filter out the pairs marked for removal
+        filtered_pre = [balance for balance in pre_token_balances 
+                        if (balance.owner, balance.mint) not in pairs_to_remove]
+        filtered_post = [balance for balance in post_token_balances 
+                        if (balance.owner, balance.mint) not in pairs_to_remove]
+        
+        return filtered_pre, filtered_post
+
+    @staticmethod
+    def remove_fee_balance_changes(pre_token_balances, post_token_balances):
+        """
+        Remove smaller balance changes that are likely fees when multiple owners 
+        have changes for the same mint token. Keeps the larger change per mint.
+        """
+        
+        # Group all balances by mint
+        mint_groups = {}
+        
+        # Collect all balances by mint
+        for balance in pre_token_balances + post_token_balances:
+            mint = balance.mint
+            if mint not in mint_groups:
+                mint_groups[mint] = []
+            mint_groups[mint].append(balance)
+        
+        # Find mints that have changes from multiple owners
+        filtered_pre = []
+        filtered_post = []
+        
+        for mint, balances in mint_groups.items():
+            owners = set(balance.owner for balance in balances)
+            
+            # If only one owner for this mint, keep all balances
+            if len(owners) == 1:
+                filtered_pre.extend([b for b in pre_token_balances if b.mint == mint])
+                filtered_post.extend([b for b in post_token_balances if b.mint == mint])
+                continue
+            
+            # Multiple owners for this mint - find the owner with the largest change
+            owner_changes = {}
+            
+            for owner in owners:
+                pre_amount = 0
+                post_amount = 0
+                
+                for balance in balances:
+                    if balance.owner == owner:
+                        amount = balance.ui_token_amount.ui_amount or 0
+                        if balance in pre_token_balances:
+                            pre_amount = amount
+                        elif balance in post_token_balances:
+                            post_amount = amount
+                
+                change = abs(post_amount - pre_amount)
+                owner_changes[owner] = change
+            
+            # Keep only the owner with the largest change
+            max_change_owner = max(owner_changes.keys(), key=lambda o: owner_changes[o])
+            
+            # Add balances for the owner with largest change
+            filtered_pre.extend([b for b in pre_token_balances if b.mint == mint and b.owner == max_change_owner])
+            filtered_post.extend([b for b in post_token_balances if b.mint == mint and b.owner == max_change_owner])
+        
+        return filtered_pre, filtered_post
+
+    @staticmethod
     def parse_raydium_v4_transaction(update, debug=False) -> RaydiumV4Transaction:
         is_creator = False
 
@@ -326,6 +412,12 @@ class TransactionParser:
         pre_token_balances = meta.pre_token_balances
         post_token_balances = meta.post_token_balances
 
+        # Remove wsol token balances since pumpfun uses sol never wsol so is most likely a fee being paid in wsol which will mess up parsing
+        pre_token_balances = [balance for balance in pre_token_balances if balance.mint != WSOL_TOKEN_ADDRESS]
+        post_token_balances = [balance for balance in post_token_balances if balance.mint != WSOL_TOKEN_ADDRESS]
+
+        pre_token_balances, post_token_balances = TransactionParser.remove_zero_balance_changes(pre_token_balances, post_token_balances)
+
         all_token_balances = []
         for b in pre_token_balances:
             all_token_balances.append(b)
@@ -350,6 +442,8 @@ class TransactionParser:
         elif len(mint_accounts) == 0:
             if debug:
                 print(f"DEBUG, no spl token balance changes for tx: {signature}")
+                print(f"PRE TOKEN BALANCE: \n {pre_token_balances}\n")
+                print(f"POST TOKEN BALANCE: \n {post_token_balances}\n")
             return None
         else:
             token_address = mint_accounts.pop()
@@ -366,9 +460,14 @@ class TransactionParser:
 
         # We're assuming theres only two changes so if more print warning message
         if len(pre_token_balances) > 2 or len(post_token_balances) > 2:
+            pre_token_balances, post_token_balances = TransactionParser.remove_fee_balance_changes(pre_token_balances, post_token_balances)
+            
+        if len(pre_token_balances) > 2 or len(post_token_balances) > 2:
             # Monitor this print to see if its some weird fee thing being sent to: ZG98FUCjb8mJ824Gbs6RsgVmr1FhXb2oNiJHa2dwmPd
             if debug:
                 print(f"ERROR, more than two or only one balance changes for tx: {signature} so returning None")
+                print(f"PRE TOKEN BALANCE: \n {pre_token_balances}\n")
+                print(f"POST TOKEN BALANCE: \n {post_token_balances}\n")
             return None
 
         # All wallets in pre or post (Should be signer and bonding curve address)
@@ -845,8 +944,7 @@ class TransactionParser:
                                     signer_sol_before=signer_sol_before,
                                     signer_sol_after=signer_sol_after
                                     )
-    
-
+        
     @staticmethod 
     def contains_program(update, program_address) -> bool:
         message = update.transaction.transaction.transaction.message

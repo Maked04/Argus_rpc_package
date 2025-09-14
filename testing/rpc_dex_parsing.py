@@ -39,7 +39,7 @@ async def get_transactions(tx_sigs) -> RPCTransaction:
 
 
 async def main():
-    transactions = ["44vbZJHojDLBBXsofSGMHsadmbn97AS7uQDaz3pHB3U8rqEmgczY9erqmREVNwoUytkd2xQX8Gynu7d1zv5Exb8A"]
+    transactions = ["3pwuocmS9hEwnW4GqWR5AYuJsSjWpypQV9kxLsV5evnNHzs6RZNPZk5mmTLsukCctaVaNfimi5xi2BjU64dj9bos"]
     await test_txs(transactions, "pump_fun")
 
 
