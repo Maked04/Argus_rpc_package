@@ -1,5 +1,6 @@
 from .RPCResponses import RPCTransaction
 from argus_rpc.utils.TransactionTypes import *
+from argus_rpc.utils.RPC.pda import get_pump_fun_bonding_curve_address
 
 
 RAYDIUM_V4_PROGRAM_ADDRESS = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
@@ -40,7 +41,7 @@ def remove_wsol_spl_changes(SPL_pre_balances, SPL_post_balances):
 
     return SPL_pre_balances, SPL_post_balances
 
-def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
+'''def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
     """ Pump fun transactions are direct sol - token swap and so only 1 spl token 
         2 sets of changes are the signers and the bonding curves token holdings
         
@@ -117,6 +118,59 @@ def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
     bonding_curve_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['owner'] == bonding_curve_address), 0)
 
     return bonding_curve_spl_before, bonding_curve_spl_after, signer_spl_before, signer_spl_after, token_address, signer, bonding_curve_address
+'''
+def get_pump_fun_spl_balances(transaction: RPCTransaction, debug=False):
+    """ Pump fun transactions are direct sol - token swap and so only 1 spl token 
+        2 sets of changes are the signers and the bonding curves token holdings
+        
+        This method returns signer and bonding curves balances, the token mint address, used signer address and the bonding curve address"""
+
+    SPL_pre_balances = transaction.pre_token_balances
+    SPL_post_balances = transaction.post_token_balances
+
+    # Remove balances where change is 0
+    SPL_pre_balances, SPL_post_balances = remove_no_spl_changes(SPL_pre_balances, SPL_post_balances)
+
+    SPL_pre_balances, SPL_post_balances = remove_wsol_spl_changes(SPL_pre_balances, SPL_post_balances)
+
+    signer_wallets = [key["pubkey"] for key in transaction.accounts if key['signer']]
+    # Only count signers that have spl change
+    signer_wallets = [signer for signer in signer_wallets if signer.lower() in [balance["owner"].lower() for balance in SPL_pre_balances + SPL_post_balances]]
+    # Token address should be the mint of any balance in spls
+    # Get all mints
+    mint_accounts = set([balance['mint'] for balance in SPL_post_balances + SPL_post_balances])
+    token_address = None
+    for mint_account in mint_accounts:
+        bonding_curve_address = get_pump_fun_bonding_curve_address(mint_account)
+        if any(balance['owner'].lower() == bonding_curve_address.lower() for balance in SPL_pre_balances + SPL_post_balances):
+            token_address = mint_account 
+            break
+
+    if token_address is None:
+        if debug:
+            print(f"ERROR, no mint accounts derive a bonding curve address which has spl changes: {transaction.signature}")
+        return None
+
+    if len(signer_wallets) == 1:
+        signer = signer_wallets[0]
+    else:
+        if len(signer_wallets) == 2:
+            signer = [signer for signer in signer_wallets if signer.lower() != token_address.lower()][0]  # On token creation we've seen two signers, one creator and one mint address so get creator
+        else:
+            if debug:
+                print(f"ERROR, more than 2 signer wallets for tx: {transaction.signature}")
+            return None
+        
+    # Need to check token address when fetching spl balances as we can have some that aren't the token address in question
+
+    signer_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'].lower() == token_address.lower() and balance['owner'].lower() == signer.lower()), 0)
+    signer_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'].lower() == token_address.lower() and balance['owner'].lower() == signer.lower()), 0)
+
+    bonding_curve_spl_before = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_pre_balances if balance['mint'].lower() == token_address.lower() and balance['owner'].lower() == bonding_curve_address.lower()), 0)
+    bonding_curve_spl_after = next((balance["uiTokenAmount"].get("uiAmount") or 0 for balance in SPL_post_balances if balance['mint'].lower() == token_address.lower() and balance['owner'].lower() == bonding_curve_address.lower()), 0)
+
+    return bonding_curve_spl_before, bonding_curve_spl_after, signer_spl_before, signer_spl_after, token_address, signer, bonding_curve_address
+
 
 def get_addresses_sol_balances(transaction: RPCTransaction, address, debug=False):
     """ Returns the given addresses sol balance changes within the given transaction info """
@@ -124,7 +178,7 @@ def get_addresses_sol_balances(transaction: RPCTransaction, address, debug=False
     post_balances = transaction.post_balances
     account_keys = transaction.accounts
 
-    wallet_index = next((index for index, key in enumerate(account_keys) if key['pubkey'] == address), None)
+    wallet_index = next((index for index, key in enumerate(account_keys) if key['pubkey'].lower() == address.lower()), None)
     if wallet_index is None:
         if debug:
             print(f"Unable to find {address} in account keys of tx: {transaction.signature}")

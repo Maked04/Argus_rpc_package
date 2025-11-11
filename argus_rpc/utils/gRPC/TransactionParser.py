@@ -1,6 +1,8 @@
 import base58
 
 from argus_rpc.utils.TransactionTypes import *
+from argus_rpc.utils.RPC.pda import get_pump_fun_bonding_curve_address
+
 
 RAYDIUM_V4_ACCOUNT = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8'
 RAYDIUM_V4_AUTHORITY_ADDRESS = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
@@ -394,6 +396,7 @@ class TransactionParser:
                                     signer_spl_after=signer_spl_after,
                                     signer_sol_change=signer_sol_change)
 
+    ''' 
     @staticmethod
     def parse_pumpfun_transaction(update, debug=False) -> PumpFunTransaction:
         tx_info = update.transaction.transaction
@@ -495,6 +498,116 @@ class TransactionParser:
 
         bonding_curve_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.owner == bonding_curve_address), 0)
         bonding_curve_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.owner == bonding_curve_address), 0)
+        if bonding_curve_address not in account_keys:
+            if debug:
+                print(f"Bonding curve address not in account keys, pretty sure it means nothing was swapped, usually on token creation")
+            return None 
+        bonding_curve_account_key_index = account_keys.index(bonding_curve_address)
+        bonding_curve_sol_before, bonding_curve_sol_after = pre_balances[bonding_curve_account_key_index]/1e9, post_balances[bonding_curve_account_key_index]/1e9
+
+        if bonding_curve_spl_after - bonding_curve_spl_before == 0:
+            return None
+
+        signer_account_key_index = account_keys.index(signer)
+        signer_sol_before, signer_sol_after = pre_balances[signer_account_key_index]/1e9, post_balances[signer_account_key_index]/1e9
+
+        if abs(bonding_curve_spl_after - bonding_curve_spl_before) < 1e-9:
+            if debug:
+                print(f"TX {signature}: SPL token change is too small or zero, can't calculate price")
+            return None
+        token_price = abs((bonding_curve_sol_after - bonding_curve_sol_before) / (bonding_curve_spl_after - bonding_curve_spl_before))
+
+        if signer_spl_after - signer_spl_before == 0 or abs(bonding_curve_sol_after - bonding_curve_sol_before) < MIN_SOL_SIZE:
+            if debug:
+                print(f"DEBUG: Not including tx as either no spl change or sol change is less than {MIN_SOL_SIZE} SOL")
+            return None
+
+        return PumpFunTransaction(
+            tx_sig=signature,
+            block_time=block_time,
+            slot=slot,
+            fee=fee,
+            token_price=token_price,
+            token_address=token_address,
+            is_creator = True if bonding_curve_spl_before == 0 else False,
+            signer=signer,
+            bc_spl_before=bonding_curve_spl_before,
+            bc_spl_after=bonding_curve_spl_after,
+            bc_sol_before=bonding_curve_sol_before,
+            bc_sol_after=bonding_curve_sol_after,
+            signer_spl_before=signer_spl_before,
+            signer_spl_after=signer_spl_after,
+            signer_sol_before=signer_sol_before,
+            signer_sol_after=signer_sol_after
+        )'''
+
+    @staticmethod
+    def parse_pumpfun_transaction(update, debug=False) -> PumpFunTransaction:
+        tx_info = update.transaction.transaction
+        message = tx_info.transaction.message
+        meta = tx_info.meta
+
+        num_of_signers = message.header.num_required_signatures
+
+        account_keys = [base58.b58encode(bytes(account_key)).decode() for account_key in message.account_keys]
+
+        signers = account_keys[:num_of_signers]
+
+        pre_balances = meta.pre_balances
+        post_balances = meta.post_balances
+
+        pre_token_balances = meta.pre_token_balances
+        post_token_balances = meta.post_token_balances
+
+        # Remove wsol token balances since pumpfun uses sol never wsol so is most likely a fee being paid in wsol which will mess up parsing
+        pre_token_balances = [balance for balance in pre_token_balances if balance.mint.lower() != WSOL_TOKEN_ADDRESS.lower()]
+        post_token_balances = [balance for balance in post_token_balances if balance.mint.lower() != WSOL_TOKEN_ADDRESS.lower()]
+
+        pre_token_balances, post_token_balances = TransactionParser.remove_zero_balance_changes(pre_token_balances, post_token_balances)
+
+        all_token_balances = []
+        for b in pre_token_balances:
+            all_token_balances.append(b)
+        
+        for b in post_token_balances:
+            all_token_balances.append(b)
+
+        block_time = update.created_at.seconds
+        slot = update.transaction.slot
+        fee = meta.fee / 1e9
+        signature=base58.b58encode(bytes(tx_info.signature)).decode()
+                
+        signers = [signer for signer in signers if signer.lower() in [balance.owner.lower() for balance in all_token_balances]]
+
+        mint_accounts = set([balance.mint for balance in all_token_balances])
+
+        token_address = None
+        for mint_account in mint_accounts:
+            bonding_curve_address = get_pump_fun_bonding_curve_address(mint_account)
+            if any(balance.owner.lower() == bonding_curve_address.lower() for balance in all_token_balances):
+                token_address = mint_account 
+                break
+
+        if token_address is None:
+            if debug:
+                print(f"ERROR, no mint accounts derive a bonding curve address which has spl changes: {signature}")
+            return None
+        
+        if len(signers) == 1:
+            signer = signers[0]
+        else:
+            if len(signers) == 2:
+                signer = [signer for signer in signers if signer.lower() != token_address.lower()][0]  # On token creation we've seen two signers, one creator and one mint address so get creator
+            else:
+                if debug:
+                    print(f"ERROR, more than 2 signer wallets for tx: {signature}")
+                return None
+
+        signer_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint.lower() == token_address.lower() and balance.owner.lower() == signer.lower()), 0)
+        signer_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint.lower() == token_address.lower() and balance.owner.lower() == signer.lower()), 0)
+
+        bonding_curve_spl_before = next((balance.ui_token_amount.ui_amount or 0 for balance in pre_token_balances if balance.mint.lower() == token_address.lower() and balance.owner.lower() == bonding_curve_address.lower()), 0)
+        bonding_curve_spl_after = next((balance.ui_token_amount.ui_amount or 0 for balance in post_token_balances if balance.mint.lower() == token_address.lower() and balance.owner.lower() == bonding_curve_address.lower()), 0)
         if bonding_curve_address not in account_keys:
             if debug:
                 print(f"Bonding curve address not in account keys, pretty sure it means nothing was swapped, usually on token creation")

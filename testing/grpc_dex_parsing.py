@@ -112,9 +112,9 @@ async def test_new_txs():
                     if "pump_fun" in response.filters:
                         try:
                             transaction = TransactionParser.parse_pumpfun_transaction(response, debug=True)
-                            print(transaction)
-                            if transaction is None:
-                                input("enter to continue")
+                            #print(transaction)
+                            #if transaction is None:
+                            #    input("enter to continue")
                             #if transaction:
                             #    print(transaction)
                             #    input("enter to continue")

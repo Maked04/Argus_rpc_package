@@ -39,7 +39,12 @@ async def get_transactions(tx_sigs) -> RPCTransaction:
 
 
 async def main():
-    transactions = ["3pwuocmS9hEwnW4GqWR5AYuJsSjWpypQV9kxLsV5evnNHzs6RZNPZk5mmTLsukCctaVaNfimi5xi2BjU64dj9bos"]
+    transactions = ["3q4E7PTqAV2xffVC2mtcQxe1GXKPsycse9YhmNjW5RbTTWyVoRRU3xoUP3aqrnEDsx7d6ST9xVswS8PxRjrFGALQ",  # multi dex swaps
+                    "4K5Cpsxzvkb19Vku6cJF6TCi3RxD5CdhhvY2eeUYVG4vFLPxyNrWmfYdMLJSmmYbXVjuaN3jBDWeX2tSrNPEpqGx",  # our bot with 2 signers
+                    "4zqG23c4G9nu1NoQKCWbDaxqE5enpWFK8aWmxZKsCxVa47HnaCv53m1imrGgxnC1dTrXcZCoqqPZaPN3PynKFQBS"]  # okx with phantom fees
+    
+    transactions = ["3FQ3Qj7Z2YuSjPzPULBJPD4C5rv5fPFpneuNsnMPYpmReRrqfmigKSEDfWhu57xywbXjp3iRNLkVLyUVmDVntyuM"  # sais more than 2 signers but solscan shows 1
+                    ]
     await test_txs(transactions, "pump_fun")
 
 

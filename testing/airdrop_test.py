@@ -291,6 +291,7 @@ async def airdrop_safety_monitor(hacked_wallet_env_vars: list[str], safe_wallet_
                 async for response in monitor.start_monitoring():
                     parsed_response = AccountChangeParser.parse_account_update(response)
                     print(f"\n📊 Account Update: {parsed_response}")
+                    continue
                     if parsed_response:
                         owner_wallet_address_lower = parsed_response['token_owner'].lower()
                         if owner_wallet_address_lower in wallet_addresses_lower:
@@ -322,8 +323,10 @@ async def airdrop_safety_monitor(hacked_wallet_env_vars: list[str], safe_wallet_
         await client.close()
 
 async def main():
-    hacked_wallet_env_vars = ["WALLET_2_PRIV"]
-    safe_wallet_env_var = "WALLET_1_PRIV"
+    '''hacked_wallet_env_vars = ["WALLET_2_PRIV"]
+    safe_wallet_env_var = "WALLET_1_PRIV"'''
+    hacked_wallet_env_vars = ["PRINTING_SOL_1_PRIV", "PRINTING_SOL_2_PRIV", "TP_NEW_STRAT_1_PRIV", "TP_NEW_STRAT_2_PRIV", "TP_OLD_STRAT_1_PRIV", "TP_OLD_STRAT_2_PRIV", "COPYTRADEGOD_PRIV", "BLT_PRIV"]
+    safe_wallet_env_var = "SAFETY_WALLET_PRIV_KEY_ENV_VAR"
 
     await airdrop_safety_monitor(hacked_wallet_env_vars, safe_wallet_env_var)
 
